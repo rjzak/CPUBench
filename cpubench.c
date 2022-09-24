@@ -8,8 +8,10 @@
 * (http://en.wikipedia.org/wiki/Chudnovsky_algorithm) and n prime numbers (http://en.wikipedia.org/wiki/Prime_number)
 * and uses the GNU Multiple Precision Arithmetic Library for most of the computations.
 *
-* Compile using gcc : gcc -O3 -Wall -o cpubench cpubench.c -lgmp -lssl -lcrypto -fopenmp
+* Compile using gcc : gcc -O3 -Wall -o cpubench cpubench.c -lgmp -fopenmp
 *
+* Changes:
+* Removed OpenSSL, now using a Makefile
 */
 
 #include <gmp.h>
@@ -19,7 +21,6 @@
 #include <time.h>
 #include <sys/resource.h>
 #include <sys/utsname.h>
-#include <openssl/md5.h>
 #include <omp.h>
 #include "md5.h"
 
@@ -54,54 +55,30 @@ double bits;
 mpz_t v1, v2, v3, v4, v5;
 mpf_t V1, V2, V3, total, tmp, res;
 mp_exp_t exponent;
-MD5_CTX context;
 
 /* Calculate log to the base 2 using GCC's bit scan reverse intrinsic */
-static __inline__ unsigned int clc_log2(const unsigned int num)
-{
+static __inline__ unsigned int clc_log2(const unsigned int num) {
     return ((num <= 1) ? 0 : 32 - (__builtin_clz(num - 1)));
 }
 
 /* Calculate MD5 checksum for verification */
-static __inline__ char *clc_md5(const char *string)
-{
-
-    /* Allocate memory to store checksum */
-    char *checksum = (char*)malloc(33);
-    /* Initialize MD5 context */
-    MD5_Init(&context);
-    /* Compute MD5 hash */
-    MD5_Update(&context, string, strlen(string));
-    /* Store MD5 hash */
-    MD5_Final(digest, &context);
-
-    /* Format digest */
-    for (u = 0; u < 16; ++u)
-    {
-        snprintf(&(checksum[u*2]), 3, "%02x", (unsigned int)digest[u]);
-    }
-
-    /* Return checksum */
-    return checksum;
+static __inline__ char *clc_md5(const char *string) {
+    md5_calc((uint8_t*) string, strlen(string));
+    return md5_result();
 }
 
 /* Calculate prime numbers */
-static __inline__ int clc_prime(unsigned long long max)
-{
+static __inline__ int clc_prime(unsigned long long max) {
     /* Get high-res time */
     clock_gettime(CLOCK_MONOTONIC_RAW, &pstart);
 
     #pragma omp parallel for shared (max) private (x, y, pnum) reduction (+:tpnums)
 
     /* Start computing primes */
-    for (x = 2; x <= max; x++)
-    {
+    for (x = 2; x <= max; x++) {
         pnum = 1;
-
-        for (y = 2; y < x; y++)
-        {
-            if (x % y == 0)
-            {
+        for (y = 2; y < x; y++) {
+            if (x % y == 0) {
                 pnum = 0;
                 break;
             }
@@ -121,8 +98,7 @@ static __inline__ int clc_prime(unsigned long long max)
 }
 
 /* Calculate pi digits main function */
-static __inline__ char *clc_pi(unsigned long dgts)
-{
+static __inline__ char *clc_pi(unsigned long dgts) {
     /* Compute required iterations */
     unsigned long iters = (dgts / 15) + 1;
 
@@ -146,8 +122,7 @@ static __inline__ char *clc_pi(unsigned long dgts)
     printf("Total iterations: %lu\n\n", iters - 1);
 
     /* Iterate and compute value using Chudnovsky Algorithm */
-    for (i = 0x0; i < iters; i++)
-    {
+    for (i = 0x0; i < iters; i++) {
         ti = i * 3;
         mpz_fac_ui(v1, 6 * i);
         mpz_set_ui(v2, constant1);
@@ -157,8 +132,7 @@ static __inline__ char *clc_pi(unsigned long dgts)
         mpz_fac_ui(v4, i);
         mpz_pow_ui(v4, v4, 3);
         mpz_ui_pow_ui(v5, constant3, ti);
-        if ((1 & ti) == 1)
-        {
+        if ((1 & ti) == 1) {
             mpz_neg(v5, v5);
         }
         mpz_mul(v1, v1, v2);
@@ -198,9 +172,7 @@ static __inline__ char *clc_pi(unsigned long dgts)
 }
 
 /* Entry point of program */
-int main(int argc, char *argv[])
-{
-
+int main(int argc, char *argv[]) {
     /* Set number of threads to split the computation between when doing multithreaded bench */
     int numthreads = omp_get_max_threads();
     omp_set_num_threads(numthreads);
@@ -215,14 +187,12 @@ int main(int argc, char *argv[])
 
     /* Try setting process priority to highest */
     int returnvalue = setpriority(PRIO_PROCESS, (id_t)0, -20);
-    if (returnvalue == -1)
-    {
+    if (returnvalue == -1) {
         printf("%sWARN: Unable to max out priority. Did you not run this app as root?%s\n", TXTYELLOW, TXTNORMAL);
     }
 
     /* Parse command line */
-    if (argc == 4 && ((strcmp(argv[3], "--printdigits") == 0) || (strcmp(argv[3], "--nodigits") == 0) || (strcmp(argv[3], "--dumpdigits") == 0)))
-    {
+    if (argc == 4 && ((strcmp(argv[3], "--printdigits") == 0) || (strcmp(argv[3], "--nodigits") == 0) || (strcmp(argv[3], "--dumpdigits") == 0))) {
         cpvalue = strtol(argv[1], &tmp_ptr, base);
         threading = (strcmp(argv[2], "--singlethreaded") == 0) ? 1 : 0;
         threading = (strcmp(argv[2], "--multithreaded") == 0) ? 0 : 1;
@@ -231,8 +201,7 @@ int main(int argc, char *argv[])
     }
 
     /* Invalid command line parameters */
-    else
-    {
+    else {
         fprintf(stderr, "%sError: Invalid command-line arguments!%s\nUsage: cpubench [value] [threading] [parameter]\nValue: Any number from 1 to 2^32-1\n(in case of single threaded bench, it will be used to compute primes from 1 to n (where n = value between 1 and 2^32-1) or n digits of PI (where n = value between 1 and 2^32-1)\nParameter:\n--printdigits : Prints all digits of PI on console\n--nodigits : Suppresses printing of digits of PI on console (Use this when doing multithreaded bench)\n--dumpdigits : Saves all the digits of PI to a text file\nThreading:\n--singlethreaded : Stresses only one core (PI)\n--multithreaded : Stresses all the cores (PRIMES)\n\nUsage example: cpubench 50000 --singlethreaded --printdigits\n", TXTRED, TXTNORMAL);
         exit(1);
     }
@@ -245,37 +214,29 @@ int main(int argc, char *argv[])
     printf("---------------------------------------------------------------%s\n\n", TXTNORMAL);
 
     /* Check if digits isnt zero or below */
-    if (cpvalue < 1)
-    {
+    if (cpvalue < 1) {
         fprintf(stderr, "%sError: Digit cannot be lower than 1%s\n", TXTRED, TXTNORMAL);
         exit(1);
     }
 
     /* Perform single threaded benchmark */
-    if (threading == 1)
-    {
-
+    if (threading == 1) {
         /* Calculate digits of pi */
         printf("Performing single-threaded benchmarking [PI]\nComputing %lu digits of PI...\n", cpvalue);
         char *digits_of_pi = clc_pi(cpvalue);
 
         /* Print the digits if user specified the --printdigits flag */
-        if (pd == 1)
-        {
+        if (pd == 1) {
             printf("Here are the digits:\n\n%.1s.%s\n", digits_of_pi, digits_of_pi + 1);
         }
 
         /* Save digits to text file if user specified the --dumpdigits flag */
-        if (dd == 1)
-        {
+        if (dd == 1) {
             FILE *file;
-            if ((file = fopen("pidigits.txt", "w")) == NULL)
-            {
+            if ((file = fopen("pidigits.txt", "w")) == NULL) {
                 fprintf(stderr, "%sError while opening file%s\n", TXTRED, TXTNORMAL);
                 exit(-1);
-            }
-            else
-            {
+            } else {
                 fprintf(file, "%.1s.%s\n", digits_of_pi, digits_of_pi + 1);
                 fclose(file);
             }
@@ -284,20 +245,14 @@ int main(int argc, char *argv[])
         /* Print MD5 checksum */
         char *md5 = clc_md5(digits_of_pi);
         printf("MD5 checksum (for verification): %s\n", md5);
-
-        md5_calc(digits_of_pi, strlen(digits_of_pi));
-        char *new_md5 = md5_result();
-        printf("                        New MD5 %s\n", new_md5);
-        free(new_md5);
+        free(md5);
 
         /* Free the memory */
         free(digits_of_pi);
     }
 
     /* Perform multi-threaded benchmark */
-    else if (threading == 0)
-    {
-
+    else if (threading == 0) {
         printf("Performing multi-threaded benchmarking [Primes]\nComputing primes under %lu...\n", cpvalue);
         long int tot = clc_prime(cpvalue);
         printf("Total primes found are %lu\n", tot);
@@ -307,12 +262,8 @@ int main(int argc, char *argv[])
         sprintf(buffer, "%lu", tot);
         char *md5 = clc_md5(buffer);
         printf("MD5 checksum (for verification): %s\n", md5);
-
-        md5_calc(buffer, strlen(buffer));
-        char *new_md5 = md5_result();
-        printf("                         New MD5 %s\n", new_md5);
-        free(new_md5);
-
+        free(md5);
+        free(buffer);
     }
 
     /* Time to go! */

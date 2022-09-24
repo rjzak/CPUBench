@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-void md5_calc(uint8_t *initial_msg, size_t initial_len);
+void md5_calc(const uint8_t *initial_msg, const size_t initial_len);
 char* md5_result();
 
 #endif
