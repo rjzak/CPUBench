@@ -21,6 +21,7 @@
 #include <sys/utsname.h>
 #include <openssl/md5.h>
 #include <omp.h>
+#include "md5.h"
 
 /* You can't compile this on Windows */
 #ifdef _WIN32
@@ -284,6 +285,11 @@ int main(int argc, char *argv[])
         char *md5 = clc_md5(digits_of_pi);
         printf("MD5 checksum (for verification): %s\n", md5);
 
+        md5_calc(digits_of_pi, strlen(digits_of_pi));
+        char *new_md5 = md5_result();
+        printf("                        New MD5 %s\n", new_md5);
+        free(new_md5);
+
         /* Free the memory */
         free(digits_of_pi);
     }
@@ -301,6 +307,11 @@ int main(int argc, char *argv[])
         sprintf(buffer, "%lu", tot);
         char *md5 = clc_md5(buffer);
         printf("MD5 checksum (for verification): %s\n", md5);
+
+        md5_calc(buffer, strlen(buffer));
+        char *new_md5 = md5_result();
+        printf("                         New MD5 %s\n", new_md5);
+        free(new_md5);
 
     }
 
