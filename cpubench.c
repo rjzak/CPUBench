@@ -21,7 +21,9 @@
 #include <time.h>
 #include <sys/resource.h>
 #include <sys/utsname.h>
+#ifdef ENABLE_OPENMP
 #include <omp.h>
+#endif
 #include "md5.h"
 
 /* You can't compile this on Windows */
@@ -67,6 +69,7 @@ static __inline__ char *clc_md5(const char *string) {
     return md5_result();
 }
 
+#ifdef ENABLE_OPENMP
 /* Calculate prime numbers */
 static __inline__ int clc_prime(unsigned long long max) {
     /* Get high-res time */
@@ -96,6 +99,7 @@ static __inline__ int clc_prime(unsigned long long max) {
     /* Return total primes */
     return tpnums;
 }
+#endif
 
 /* Calculate pi digits main function */
 static __inline__ char *clc_pi(unsigned long dgts) {
@@ -174,8 +178,10 @@ static __inline__ char *clc_pi(unsigned long dgts) {
 /* Entry point of program */
 int main(int argc, char *argv[]) {
     /* Set number of threads to split the computation between when doing multithreaded bench */
+#ifdef ENABLE_OPENMP
     int numthreads = omp_get_max_threads();
     omp_set_num_threads(numthreads);
+#endif
 
     /* Variable declaration and initialization */
     unsigned long cpvalue = 10000;
@@ -183,7 +189,9 @@ int main(int argc, char *argv[]) {
     char *tmp_ptr;
     int pd = 0;
     int dd = 0;
+#ifdef ENABLE_OPENMP
     int threading = 0;
+#endif
 
     /* Try setting process priority to highest */
     int returnvalue = setpriority(PRIO_PROCESS, (id_t)0, -20);
@@ -192,17 +200,30 @@ int main(int argc, char *argv[]) {
     }
 
     /* Parse command line */
-    if (argc == 4 && ((strcmp(argv[3], "--printdigits") == 0) || (strcmp(argv[3], "--nodigits") == 0) || (strcmp(argv[3], "--dumpdigits") == 0))) {
+#ifdef ENABLE_OPENMP
+    const int max_args = 4;
+#else
+    const int max_args = 3;
+#endif
+    if (argc == max_args && ((strcmp(argv[max_args-1], "--printdigits") == 0) || (strcmp(argv[max_args-1], "--nodigits") == 0) || (strcmp(argv[max_args-1], "--dumpdigits") == 0))) {
         cpvalue = strtol(argv[1], &tmp_ptr, base);
+#ifdef ENABLE_OPENMP
         threading = (strcmp(argv[2], "--singlethreaded") == 0) ? 1 : 0;
         threading = (strcmp(argv[2], "--multithreaded") == 0) ? 0 : 1;
-        pd = (strcmp(argv[3], "--printdigits") == 0) ? 1 : 0;
-        dd = (strcmp(argv[3], "--dumpdigits") == 0) ? 1 : 0;
+#endif
+        pd = (strcmp(argv[max_args-1], "--printdigits") == 0) ? 1 : 0;
+        dd = (strcmp(argv[max_args-1], "--dumpdigits") == 0) ? 1 : 0;
     }
 
     /* Invalid command line parameters */
     else {
-        fprintf(stderr, "%sError: Invalid command-line arguments!%s\nUsage: cpubench [value] [threading] [parameter]\nValue: Any number from 1 to 2^32-1\n(in case of single threaded bench, it will be used to compute primes from 1 to n (where n = value between 1 and 2^32-1) or n digits of PI (where n = value between 1 and 2^32-1)\nParameter:\n--printdigits : Prints all digits of PI on console\n--nodigits : Suppresses printing of digits of PI on console (Use this when doing multithreaded bench)\n--dumpdigits : Saves all the digits of PI to a text file\nThreading:\n--singlethreaded : Stresses only one core (PI)\n--multithreaded : Stresses all the cores (PRIMES)\n\nUsage example: cpubench 50000 --singlethreaded --printdigits\n", TXTRED, TXTNORMAL);
+        fprintf(stderr, "%sError: Invalid command-line arguments!%s\nUsage: cpubench [value] [threading] [parameter]\nValue: Any number from 1 to 2^32-1\n(in case of single threaded bench, it will be used to compute primes from 1 to n (where n = value between 1 and 2^32-1) or n digits of PI (where n = value between 1 and 2^32-1)\nParameter:\n--printdigits : Prints all digits of PI on console\n--nodigits : Suppresses printing of digits of PI on console (Use this when doing multithreaded bench)\n--dumpdigits : Saves all the digits of PI to a text file\n", TXTRED, TXTNORMAL);
+#ifdef ENABLE_OPENMP
+        fprintf(stderr, "Threading:\n--singlethreaded : Stresses only one core (PI)\n--multithreaded : Stresses all the cores (PRIMES)\n\n");
+        fprintf(stderr, "Usage example: cpubench 50000 --singlethreaded --printdigits\n");
+#else
+        fprintf(stderr, "Usage example: cpubench 50000 --printdigits\n");
+#endif
         exit(1);
     }
 
@@ -219,8 +240,10 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
+#ifdef ENABLE_OPENMP
     /* Perform single threaded benchmark */
     if (threading == 1) {
+#endif
         /* Calculate digits of pi */
         printf("Performing single-threaded benchmarking [PI]\nComputing %lu digits of PI...\n", cpvalue);
         char *digits_of_pi = clc_pi(cpvalue);
@@ -249,6 +272,7 @@ int main(int argc, char *argv[]) {
 
         /* Free the memory */
         free(digits_of_pi);
+#ifdef ENABLE_OPENMP
     }
 
     /* Perform multi-threaded benchmark */
@@ -265,7 +289,7 @@ int main(int argc, char *argv[]) {
         free(md5);
         free(buffer);
     }
-
+#endif
     /* Time to go! */
     printf("Goodbye!\n");
     return 0;
